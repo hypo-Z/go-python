@@ -12,6 +12,7 @@ import (
 )
 
 //go:embed resources/windows/pywin/*
+//go:embed resources/core/script.py
 var pyappFS embed.FS
 
 var pythonCacheDir string
@@ -24,7 +25,7 @@ func main() {
 	}
 
 	// 调用 Python 脚本
-	output, err := runPythonScript(pythonDir, "script.py", "hello")
+	output, err := runPythonScript(pythonDir, "this test")
 	if err != nil {
 		fmt.Printf("Python error: %v\n%s", err, output)
 		return
@@ -79,10 +80,15 @@ func copyFS(destDir string, srcFS embed.FS) error {
 		if err != nil {
 			return err
 		}
-		// 从完整路径中提取文件名（去掉 resources/windows/pywin/ 前缀）
+		// 从完整路径中提取文件名
 		basePath := path
+		// 处理 Python 运行时文件路径
 		if len(path) > len("resources/windows/pywin/") && path[:len("resources/windows/pywin/")] == "resources/windows/pywin/" {
 			basePath = path[len("resources/windows/pywin/"):]
+		}
+		// 处理 Python 脚本文件路径
+		if len(path) > len("resources/core/") && path[:len("resources/core/")] == "resources/core/" {
+			basePath = path[len("resources/core/"):]
 		}
 		destPath := filepath.Join(destDir, basePath)
 		if d.IsDir() {
@@ -96,9 +102,10 @@ func copyFS(destDir string, srcFS embed.FS) error {
 	})
 }
 
-func runPythonScript(pythonDir, script string, args ...string) ([]byte, error) {
+func runPythonScript(pythonDir string, args ...string) ([]byte, error) {
 	pythonBin := filepath.Join(pythonDir, "python.exe")
-	cmdArgs := append([]string{script}, args...)
+	scriptPath := filepath.Join(pythonDir, "script.py")
+	cmdArgs := append([]string{scriptPath}, args...)
 	cmd := exec.Command(pythonBin, cmdArgs...)
 	cmd.Env = append(os.Environ(),
 		"PYTHONHOME="+pythonDir,
