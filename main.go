@@ -8,17 +8,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
-// go:embed pyapp
+//go:embed resources/windows/pywin/*
 var pyappFS embed.FS
 
+var pythonCacheDir string
+var cacheMutex sync.Mutex
+
 func main() {
-	pythonDir, err := extractPythonRuntime()
+	pythonDir, err := getPythonRuntime()
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(pythonDir) // 退出时清理
 
 	// 调用 Python 脚本
 	output, err := runPythonScript(pythonDir, "script.py", "hello")
@@ -27,6 +30,29 @@ func main() {
 		return
 	}
 	fmt.Println("Python output:", string(output))
+}
+
+// 获取 Python 运行时（带缓存）
+func getPythonRuntime() (string, error) {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+
+	if pythonCacheDir != "" {
+		// 检查缓存目录是否仍然存在
+		if _, err := os.Stat(pythonCacheDir); err == nil {
+			return pythonCacheDir, nil
+		}
+		pythonCacheDir = "" // 缓存失效
+	}
+
+	pythonDir, err := extractPythonRuntime()
+	if err != nil {
+		return "", err
+	}
+
+	// 设置缓存（不自动清理）
+	pythonCacheDir = pythonDir
+	return pythonDir, nil
 }
 
 func extractPythonRuntime() (string, error) {
@@ -53,7 +79,12 @@ func copyFS(destDir string, srcFS embed.FS) error {
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join(destDir, path)
+		// 从完整路径中提取文件名（去掉 resources/windows/pywin/ 前缀）
+		basePath := path
+		if len(path) > len("resources/windows/pywin/") && path[:len("resources/windows/pywin/")] == "resources/windows/pywin/" {
+			basePath = path[len("resources/windows/pywin/"):]
+		}
+		destPath := filepath.Join(destDir, basePath)
 		if d.IsDir() {
 			return os.MkdirAll(destPath, 0755)
 		}
@@ -66,10 +97,7 @@ func copyFS(destDir string, srcFS embed.FS) error {
 }
 
 func runPythonScript(pythonDir, script string, args ...string) ([]byte, error) {
-	pythonBin := filepath.Join(pythonDir, "python")
-	if runtime.GOOS == "windows" {
-		pythonBin += ".exe"
-	}
+	pythonBin := filepath.Join(pythonDir, "python.exe")
 	cmdArgs := append([]string{script}, args...)
 	cmd := exec.Command(pythonBin, cmdArgs...)
 	cmd.Env = append(os.Environ(),

@@ -1,4 +1,8 @@
 import sys
+import io
+
+# 设置标准输出的编码为 UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # 你的业务逻辑
 def process(data):
