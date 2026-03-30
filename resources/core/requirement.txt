@@ -1,0 +1,9 @@
+# 兼容 Python 3.11 的第三方包要求
+requests==2.31.0
+numpy==1.24.3
+pandas==1.5.3
+matplotlib==3.7.1
+
+# 可选：轻量级替代方案
+urllib3==1.26.16
+beautifulsoup4==4.12.2

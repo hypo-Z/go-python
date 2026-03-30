@@ -12,7 +12,9 @@ import (
 )
 
 //go:embed resources/windows/pywin/*
-//go:embed resources/core/script.py
+//go:embed resources/core/*
+//go:embed resources/core/lib/*
+//go:embed resources/core/site-packages/*
 var pyappFS embed.FS
 
 var pythonCacheDir string
@@ -86,7 +88,7 @@ func copyFS(destDir string, srcFS embed.FS) error {
 		if len(path) > len("resources/windows/pywin/") && path[:len("resources/windows/pywin/")] == "resources/windows/pywin/" {
 			basePath = path[len("resources/windows/pywin/"):]
 		}
-		// 处理 Python 脚本文件路径
+		// 处理 Python 核心文件路径
 		if len(path) > len("resources/core/") && path[:len("resources/core/")] == "resources/core/" {
 			basePath = path[len("resources/core/"):]
 		}

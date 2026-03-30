@@ -1,2 +1,4 @@
 .idea
 data
+resources/core/site-packages
+myapp.exe

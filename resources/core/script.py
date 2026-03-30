@@ -10,19 +10,70 @@ from datetime import datetime
 from urllib.request import urlopen
 from urllib.error import URLError
 
+# 尝试导入版本获取模块
+try:
+    import importlib.metadata
+    IMPORTLIB_METADATA_AVAILABLE = True
+except ImportError:
+    # Python < 3.8 兼容
+    try:
+        import importlib_metadata as importlib_metadata
+        IMPORTLIB_METADATA_AVAILABLE = True
+    except ImportError:
+        IMPORTLIB_METADATA_AVAILABLE = False
+
 # 设置标准输出的编码为 UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# 数据处理模块
+# 添加自定义模块路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'site-packages'))
+
+# 尝试导入自定义模块
+try:
+    from mylib import DataValidator, ConfigManager
+except ImportError as e:
+    print(f"⚠️ 自定义模块导入警告: {e}")
+    # 创建虚拟模块类
+    class DataValidator:
+        def validate_email(self, email):
+            return "@" in email if email else False
+        
+        def validate_phone(self, phone):
+            return phone and phone.replace("-", "").replace(" ", "").isdigit()
+    
+    class ConfigManager:
+        def __init__(self):
+            self.config = {"version": "1.0", "environment": "test"}
+        
+        def get(self, key, default=None):
+            return self.config.get(key, default)
+
+# 尝试导入第三方库
+try:
+    import requests
+except ImportError:
+    requests = None
+    print("⚠️ requests 库不可用，使用内置 urllib")
+
+# 数据处理模块（增强版）
 class DataProcessor:
     def __init__(self):
         self.processed_count = 0
     
     def process_data(self, data):
-        """复杂的数据处理逻辑"""
+        """复杂的数据处理逻辑（增强版）"""
         # 1. 数据验证
-        if not data or len(data.strip()) == 0:
-            return {"error": "输入数据为空"}
+        validator = DataValidator()
+        validation_result = {
+            "is_empty": not data or len(data.strip()) == 0,
+            "is_email": validator.validate_email(data) if "@" in data else False,
+            "is_phone": validator.validate_phone(data) if any(c.isdigit() for c in data) else False,
+            "has_special_chars": any(not c.isalnum() for c in data) if data else False
+        }
+        
+        if validation_result["is_empty"]:
+            return {"error": "输入数据为空", "validation": validation_result}
         
         # 2. 数据转换
         processed = {
@@ -34,7 +85,8 @@ class DataProcessor:
             "hash_md5": hashlib.md5(data.encode()).hexdigest(),
             "hash_sha256": hashlib.sha256(data.encode()).hexdigest(),
             "base64": base64.b64encode(data.encode()).decode(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "validation": validation_result
         }
         
         # 3. 统计分析
@@ -43,6 +95,13 @@ class DataProcessor:
             if char.isalnum():
                 char_count[char] = char_count.get(char, 0) + 1
         processed["char_frequency"] = char_count
+        
+        # 4. 使用配置管理器
+        config = ConfigManager()
+        processed["config"] = {
+            "version": config.get("version"),
+            "environment": config.get("environment")
+        }
         
         self.processed_count += 1
         processed["process_id"] = self.processed_count
@@ -89,34 +148,144 @@ class FileManager:
         
         return files
 
-# 网络请求模块
+# 网络请求模块（增强版）
 class NetworkService:
     def __init__(self):
         self.timeout = 10
     
     def get_public_ip(self):
         """获取公网IP地址"""
+        # 优先使用 requests 库
+        if requests:
+            try:
+                response = requests.get('http://httpbin.org/ip', timeout=self.timeout)
+                return {"success": True, "ip": response.json().get('origin'), "library": "requests"}
+            except Exception as e:
+                return {"success": False, "error": str(e), "library": "requests"}
+        
+        # 回退到 urllib
         try:
             with urlopen('http://httpbin.org/ip', timeout=self.timeout) as response:
                 data = json.loads(response.read().decode())
-                return {"success": True, "ip": data.get('origin')}
+                return {"success": True, "ip": data.get('origin'), "library": "urllib"}
         except URLError as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "library": "urllib"}
     
     def check_internet(self):
         """检查网络连接"""
+        # 优先使用 requests 库
+        if requests:
+            try:
+                response = requests.get('http://httpbin.org/get', timeout=self.timeout)
+                return {"success": True, "status": response.status_code, "library": "requests"}
+            except Exception as e:
+                return {"success": False, "error": str(e), "library": "requests"}
+        
+        # 回退到 urllib
         try:
             with urlopen('http://httpbin.org/get', timeout=self.timeout) as response:
-                return {"success": True, "status": response.status}
+                return {"success": True, "status": response.status, "library": "urllib"}
         except URLError as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "library": "urllib"}
 
-# 主业务逻辑
+# 第三方库测试模块
+class ThirdPartyTester:
+    def __init__(self):
+        self.available_libraries = {}
+        self.test_libraries()
+    
+    def test_libraries(self):
+        """测试可用的第三方库"""
+        libraries_to_test = [
+            ("json", "标准库"),
+            ("hashlib", "标准库"),
+            ("base64", "标准库"),
+            ("requests", "第三方"),
+            ("numpy", "第三方"),
+            ("pandas", "第三方"),
+            ("matplotlib", "第三方")
+        ]
+        
+        for lib_name, lib_type in libraries_to_test:
+            try:
+                __import__(lib_name)
+                self.available_libraries[lib_name] = {
+                    "type": lib_type,
+                    "available": True,
+                    "version": self.get_library_version(lib_name)
+                }
+            except ImportError:
+                self.available_libraries[lib_name] = {
+                    "type": lib_type,
+                    "available": False,
+                    "version": None
+                }
+    
+    def get_library_version(self, lib_name):
+        """获取库版本"""
+        try:
+            if lib_name == "json" or lib_name == "hashlib" or lib_name == "base64":
+                return "built-in"
+            
+            # 如果有 importlib.metadata 或 importlib_metadata，优先使用它
+            if IMPORTLIB_METADATA_AVAILABLE:
+                try:
+                    if 'importlib.metadata' in sys.modules:
+                        version = importlib.metadata.version(lib_name)
+                    else:
+                        version = importlib_metadata.version(lib_name)
+                    return version
+                except Exception:
+                    # 如果 importlib.metadata 获取失败，回退到其他方法
+                    pass
+
+            # 回退到原来的方案
+            module = __import__(lib_name)
+            
+            # 尝试 __version__ 属性
+            version = getattr(module, "__version__", None)
+            if version:
+                return str(version)
+            
+            # 尝试 version 属性
+            version = getattr(module, "version", None)
+            if version:
+                if isinstance(version, tuple):
+                    return '.'.join(map(str, version))
+                return str(version)
+            
+            # 尝试 VERSION 属性
+            version = getattr(module, "VERSION", None)
+            if version:
+                if isinstance(version, tuple):
+                    return '.'.join(map(str, version))
+                return str(version)
+            
+            # 对于特定库尝试特殊属性
+            if lib_name == "requests":
+                import requests
+                return str(requests.__version__)
+            elif lib_name == "numpy":
+                import numpy
+                return str(numpy.__version__)
+            elif lib_name == "pandas":
+                import pandas
+                return str(pandas.__version__)
+            elif lib_name == "matplotlib":
+                import matplotlib
+                return str(matplotlib.__version__)
+            
+            return "unknown"
+        except Exception as e:
+            return "unknown"
+
+# 主业务逻辑（增强版）
 class ComplexProcessor:
     def __init__(self):
         self.data_processor = DataProcessor()
         self.file_manager = FileManager()
         self.network_service = NetworkService()
+        self.library_tester = ThirdPartyTester()
     
     def process_complex(self, input_data, save_file=True, check_network=True):
         """完整的复杂处理流程"""
@@ -170,6 +339,17 @@ class ComplexProcessor:
             "name": "文件列表",
             "duration": round(step4_time, 4),
             "result": {"file_count": len(file_list), "files": file_list}
+        })
+        
+        # 步骤5: 库可用性测试
+        step5_start = time.time()
+        library_report = self.library_tester.available_libraries
+        step5_time = time.time() - step5_start
+        
+        result["steps"].append({
+            "name": "库可用性测试",
+            "duration": round(step5_time, 4),
+            "result": library_report
         })
         
         result["end_time"] = datetime.now().isoformat()
